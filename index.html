@@ -2,21 +2,20 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canvas with Toggle Sidebar</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Canvas with Sidebar</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body class="relative w-screen h-screen overflow-hidden bg-black">
 
-    <!-- Canvas filling the screen -->
-    <canvas id="myCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+    <!-- Canvas -->
+    <canvas id="myCanvas" class="absolute top-0 left-0 w-full h-full z-10"></canvas>
 
-    <!-- Options button (hamburger icon) -->
+    <!-- Sidebar toggle button -->
     <button id="toggleButton"
         class="absolute top-4 left-4 z-30 p-3 bg-gray-800 rounded-md hover:bg-gray-700 flex items-center justify-center">
-        <!-- Clean hamburger icon -->
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd"
                 d="M3 5h14a1 1 0 110 2H3a1 1 0 010-2zm0 4h14a1 1 0 110 2H3a1 1 0 010-2zm0 4h14a1 1 0 110 2H3a1 1 0 010-2z"
@@ -24,25 +23,30 @@
         </svg>
     </button>
 
-    <!-- Sidebar (hidden by default) -->
+    <!-- Sidebar -->
     <div id="sidebar"
         class="fixed top-0 left-0 h-full w-64 bg-gray-900 text-white pt-20 px-6 transform -translate-x-full transition-transform duration-300 z-20">
         <h2 class="text-2xl font-bold mb-6">Options</h2>
 
-        <!-- Clear Canvas Button -->
         <button id="clearButton" class="mb-6 px-4 py-2 bg-red-600 hover:bg-red-700 rounded w-full">
             Clear Canvas
         </button>
 
-        <!-- Points Counter -->
         <div class="text-lg">
             Points: <span id="pointsCount">0</span>
         </div>
+
+        <div class="mt-6">
+            <label class="block mb-2 text-sm font-medium">Upload Image:</label>
+            <input type="file" id="imageInput" accept="image/*"
+                class="w-full text-sm text-white bg-gray-800 p-2 rounded" />
+        </div>
+        <button id="edgeButton" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded w-full hidden">
+            Detect Edges
+        </button>
     </div>
 
-    <!-- Link to external JavaScript -->
     <script src="index.js"></script>
-
 </body>
 
 </html>
