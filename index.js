@@ -6,103 +6,12 @@ const clearButton = document.getElementById('clearButton');
 const pointsCount = document.getElementById('pointsCount');
 const imageInput = document.getElementById('imageInput');
 const edgeButton = document.getElementById('edgeButton');
+const fourierButton = document.getElementById('fourierBtn');
 let uploadedImage = null;
 
 
 let drawing = false;
 let points = [];
-
-toggleButton.addEventListener('click', () => {
-  sidebar.classList.toggle('-translate-x-full');
-});
-
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-canvas.addEventListener('mousedown', (e) => {
-  drawing = true;
-  addPoint(e);
-});
-canvas.addEventListener('mouseup', () => {
-  drawing = false;
-});
-canvas.addEventListener('mousemove', (e) => {
-  if (!drawing) return;
-  addPoint(e);
-  drawLine();
-});
-
-function addPoint(e) {
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  points.push({ x, y });
-  updatePointsCount();
-}
-
-function drawLine() {
-  if (points.length < 2) return;
-  ctx.strokeStyle = 'white';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(points[points.length - 2].x, points[points.length - 2].y);
-  ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
-  ctx.stroke();
-}
-
-clearButton.addEventListener('click', () => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  points = [];
-  updatePointsCount();
-
-  // Clear uploaded image and file input
-  imageInput.value = '';
-  uploadedImage = null;
-  edgeButton.classList.add('hidden'); // Optionally hide the button again
-});
-
-function updatePointsCount() {
-  pointsCount.textContent = points.length;
-}
-
-imageInput.addEventListener('change', (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const img = new Image();
-  const reader = new FileReader();
-
-  reader.onload = function (e) {
-    img.onload = function () {
-      console.log('Image loaded successfully'); // ADD THIS LINE
-      uploadedImage = img;
-      edgeButton.classList.remove('hidden'); // Show the button
-      console.log(edgeButton.classList);
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Optional: show the original image scaled to fit canvas
-      const aspectRatio = img.width / img.height;
-      let drawWidth = canvas.width;
-      let drawHeight = canvas.height;
-
-      if (canvas.width / canvas.height > aspectRatio) {
-        drawWidth = canvas.height * aspectRatio;
-      } else {
-        drawHeight = canvas.width / aspectRatio;
-      }
-
-      ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
-    };
-    img.src = e.target.result;
-  };
-
-  reader.readAsDataURL(file);
-});
 
 function applySobel(imageData) {
   const { width, height, data } = imageData;
@@ -186,6 +95,128 @@ function applySobel(imageData) {
 
   return new ImageData(output, width, height);
 }
+
+function FFT() {
+  console.log("Fourier!");
+
+}
+
+function redraw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
+  }
+  ctx.stroke();
+}
+
+function drawLine(p1, p2, color = 'white') {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.stroke();
+}
+
+function addPoint(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  points.push({ x, y });
+  updatePointsCount();
+}
+
+function updatePointsCount() {
+  pointsCount.textContent = points.length;
+}
+
+toggleButton.addEventListener('click', () => {
+  sidebar.classList.toggle('-translate-x-full');
+});
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  drawing = true;
+  if (fourierButton.disabled) {
+    fourierBtn.removeAttribute("disabled");
+  }
+  addPoint(e);
+  redraw()
+});
+
+canvas.addEventListener('mouseup', () => {
+  drawing = false;
+  drawLine(points[points.length-1], points[0], "lime");
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!drawing) return;
+  addPoint(e);
+  if (points.length < 2) return;
+  drawLine(points[points.length - 2], points[points.length - 1]);
+});
+
+fourierButton.addEventListener('click', () => {
+  fourierBtn.setAttribute("disabled", true);
+  FFT()
+});
+
+clearButton.addEventListener('click', () => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  points = [];
+  updatePointsCount();
+
+  // Clear uploaded image and file input
+  imageInput.value = '';
+  uploadedImage = null;
+  edgeButton.classList.add('hidden'); // Optionally hide the button again
+});
+
+imageInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const img = new Image();
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    img.onload = function () {
+      console.log('Image loaded successfully'); // ADD THIS LINE
+      uploadedImage = img;
+      edgeButton.classList.remove('hidden'); // Show the button
+      console.log(edgeButton.classList);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Optional: show the original image scaled to fit canvas
+      const aspectRatio = img.width / img.height;
+      let drawWidth = canvas.width;
+      let drawHeight = canvas.height;
+
+      if (canvas.width / canvas.height > aspectRatio) {
+        drawWidth = canvas.height * aspectRatio;
+      } else {
+        drawHeight = canvas.width / aspectRatio;
+      }
+
+      ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
+    };
+    img.src = e.target.result;
+  };
+
+  reader.readAsDataURL(file);
+});
 
 edgeButton.addEventListener('click', () => {
   if (!uploadedImage) return;
