@@ -7,6 +7,10 @@ const pointsCount = document.getElementById('pointsCount');
 const imageInput = document.getElementById('imageInput');
 const edgeButton = document.getElementById('edgeButton');
 const fourierButton = document.getElementById('fourierBtn');
+let DrawInterval
+let freq = 0
+let delta = 0
+
 let uploadedImage = null;
 
 
@@ -97,8 +101,105 @@ function applySobel(imageData) {
 }
 
 function FFT() {
-  console.log("Fourier!");
+  fixToRadix2()
+  let DFT = new Array(points.length).fill(0)
+  DFT = ditFFT2(points, points.length)
+  let circles = DFTtoCircle(DFT)
+  freq = 2 * math.pi / points.length * math.ceil(points.length / 700)  
+  DrawInterval = setInterval(drawCircle, 10, circles);
+}
 
+function DFTtoCircle(DFT) {
+  let circles = []
+  for (let i = 0; i < DFT.length; i++) {
+    circles.push({ freq: i, amp: math.abs(DFT[i]), phase: math.atan2(DFT[i].im, DFT[i].re) })
+  }
+  circles.sort((a, b) => b.amp - a.amp)
+  return circles
+}
+
+function ditFFT2(x, N, s = 1) {
+  // Allocate output array
+  const X = new Array(N);
+
+  // Base case
+  if (N === 1) {
+    X[0] = math.complex(x[0].x, x[0].y)
+    return X;
+  }
+
+  // Recursive DFTs of even and odd indices
+  const even = ditFFT2(x, N / 2, 2 * s);         // x0, x2s, x4s, ...
+  const odd = ditFFT2(x.slice(s), N / 2, 2 * s); // xs, x3s, x5s, ...
+
+  // Combine
+  for (let k = 0; k < N / 2; k++) {
+    const t = math.multiply(math.exp(math.multiply(math.i, 2 * Math.PI * k / N)), odd[k]);
+    X[k] = math.add(even[k], t);
+    X[k + N / 2] = math.subtract(even[k], t);
+  }
+
+  if (s === 1) {
+    for (let i = 0; i < N; i++) {
+      X[i] = math.divide(X[i], N);
+    }
+  }
+
+  return X;
+}
+
+function fixToRadix2() {
+  let dots = points.length
+  let fix = 0
+  let power
+  for (power = 0; dots > 1; power++) {
+    if (dots % 2 == 1) {
+      dots += 1
+      fix += 2 ** power
+    }
+    dots /= 2
+  }
+  // let dist = points.length/fix
+  for (let i = 0; i < fix; i++) {
+    points.push(points[points.length - 1])
+  }
+}
+
+function drawCircle(circles) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  let x = 0, y = 0
+  let way = []
+  for (let i = 0; i < circles.length; i++) {
+    way.push({ x, y })
+    x += circles[i].amp * math.cos(circles[i].phase + delta * circles[i].freq)
+    y += circles[i].amp * math.sin(circles[i].phase + delta * circles[i].freq)
+  }
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 1;
+  for (let index = 1; index < way.length; index++) {
+    ctx.beginPath();
+    ctx.arc(way[index].x, way[index].y, circles[index].amp, 0, 2 * Math.PI)
+    ctx.stroke();
+  }
+  
+  ctx.strokeStyle = "cyan";
+  ctx.beginPath();
+  ctx.moveTo(way[0].x, way[0].y)
+  for (let index = 1; index < way.length; index++) {
+    ctx.lineTo(way[index].x, way[index].y)
+  }
+  ctx.lineTo(x, y)
+  ctx.stroke();
+
+  ctx.strokeStyle = "red"
+  ctx.beginPath();
+  ctx.moveTo(x, y)
+  ctx.lineTo(x, y)
+  ctx.stroke();
+
+  delta += freq
+  console.log(delta);
+  
 }
 
 function redraw() {
@@ -157,7 +258,7 @@ canvas.addEventListener('mousedown', (e) => {
 
 canvas.addEventListener('mouseup', () => {
   drawing = false;
-  drawLine(points[points.length-1], points[0], "lime");
+  drawLine(points[points.length - 1], points[0], "lime");
 });
 
 canvas.addEventListener('mousemove', (e) => {
@@ -181,6 +282,7 @@ clearButton.addEventListener('click', () => {
   imageInput.value = '';
   uploadedImage = null;
   edgeButton.classList.add('hidden'); // Optionally hide the button again
+  clearInterval(DrawInterval)
 });
 
 imageInput.addEventListener('change', (event) => {
