@@ -105,7 +105,7 @@ function FFT() {
   let DFT = new Array(points.length).fill(0)
   DFT = ditFFT2(points, points.length)
   let circles = DFTtoCircle(DFT)
-  freq = 2 * math.pi / points.length * math.ceil(points.length / 700)  
+  freq = 2 * math.pi / points.length * math.ceil(points.length / 700)
   DrawInterval = setInterval(drawCircle, 10, circles);
 }
 
@@ -159,9 +159,14 @@ function fixToRadix2() {
     }
     dots /= 2
   }
-  // let dist = points.length/fix
+  let dx=(points[0].x - points[points.length - 1].x) / fix
+  let dy=(points[0].y - points[points.length - 1].y) / fix
+  
   for (let i = 0; i < fix; i++) {
-    points.push(points[points.length - 1])
+    points.push({
+      x: (points[points.length - 1].x + dx),
+      y: (points[points.length - 1].y + dy)
+    })    
   }
 }
 
@@ -181,7 +186,7 @@ function drawCircle(circles) {
     ctx.arc(way[index].x, way[index].y, circles[index].amp, 0, 2 * Math.PI)
     ctx.stroke();
   }
-  
+
   ctx.strokeStyle = "cyan";
   ctx.beginPath();
   ctx.moveTo(way[0].x, way[0].y)
@@ -198,8 +203,6 @@ function drawCircle(circles) {
   ctx.stroke();
 
   delta += freq
-  console.log(delta);
-  
 }
 
 function redraw() {
