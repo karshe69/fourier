@@ -16,6 +16,7 @@ let uploadedImage = null;
 
 let drawing = false;
 let points = [];
+let path = []
 
 function applySobel(imageData) {
   const { width, height, data } = imageData;
@@ -105,7 +106,7 @@ function FFT() {
   let DFT = new Array(points.length).fill(0)
   DFT = ditFFT2(points, points.length)
   let circles = DFTtoCircle(DFT)
-  freq = 2 * math.pi / points.length * math.ceil(points.length / 700)
+  freq = 2 * math.pi / points.length * math.ceil(points.length / 500)  
   DrawInterval = setInterval(drawCircle, 10, circles);
 }
 
@@ -159,14 +160,14 @@ function fixToRadix2() {
     }
     dots /= 2
   }
-  let dx=(points[0].x - points[points.length - 1].x) / fix
-  let dy=(points[0].y - points[points.length - 1].y) / fix
-  
+  let dx = (points[0].x - points[points.length - 1].x) / fix
+  let dy = (points[0].y - points[points.length - 1].y) / fix
+
   for (let i = 0; i < fix; i++) {
     points.push({
       x: (points[points.length - 1].x + dx),
       y: (points[points.length - 1].y + dy)
-    })    
+    })
   }
 }
 
@@ -181,7 +182,7 @@ function drawCircle(circles) {
   }
   ctx.strokeStyle = "white";
   ctx.lineWidth = 1;
-  for (let index = 1; index < way.length; index++) {
+  for (let index = 1; index < way.length && circles[index].amp > 1; index++) {
     ctx.beginPath();
     ctx.arc(way[index].x, way[index].y, circles[index].amp, 0, 2 * Math.PI)
     ctx.stroke();
@@ -196,13 +197,23 @@ function drawCircle(circles) {
   ctx.lineTo(x, y)
   ctx.stroke();
 
-  ctx.strokeStyle = "red"
-  ctx.beginPath();
-  ctx.moveTo(x, y)
-  ctx.lineTo(x, y)
-  ctx.stroke();
-
+  path.push({ x, y })
   delta += freq
+  fadeOut()
+}
+
+function fadeOut() {
+  let alpha = 1 
+  dt = math.pow(0.2, freq/(2 * math.pi))
+  for (let i = path.length-1; i >= 1; i--) {
+    ctx.strokeStyle = `rgba(255, 0, 0, ${alpha})`
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(path[i].x, path[i].y)
+    ctx.lineTo(path[i-1].x, path[i-1].y)        
+    ctx.stroke();
+    alpha*=dt
+  }
 }
 
 function redraw() {
@@ -279,6 +290,7 @@ fourierButton.addEventListener('click', () => {
 clearButton.addEventListener('click', () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   points = [];
+  path = [];
   updatePointsCount();
 
   // Clear uploaded image and file input
