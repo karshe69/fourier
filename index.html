@@ -2,39 +2,32 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Canvas with Sidebar</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fourier Drawing</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body class="relative w-screen h-screen overflow-hidden bg-black">
 
-    <!-- Canvas -->
     <canvas id="myCanvas" class="absolute top-0 left-0 w-full h-full z-10"></canvas>
 
-    <!-- Sidebar toggle button -->
-    <button id="toggleButton"
-        class="absolute top-4 left-4 z-30 p-3 bg-gray-800 rounded-md hover:bg-gray-700 flex items-center justify-center">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd"
-                d="M3 5h14a1 1 0 110 2H3a1 1 0 010-2zm0 4h14a1 1 0 110 2H3a1 1 0 010-2zm0 4h14a1 1 0 110 2H3a1 1 0 010-2z"
-                clip-rule="evenodd" />
-        </svg>
+    <button id="toggleButton" class="absolute top-4 left-4 z-30 p-3 bg-gray-800 rounded-md hover:bg-gray-700">
+        ☰
     </button>
 
-    <!-- Sidebar -->
     <div id="sidebar"
         class="fixed top-0 left-0 h-full w-64 bg-gray-900 text-white pt-20 px-6 transform -translate-x-full transition-transform duration-300 z-20">
+
         <h2 class="text-2xl font-bold mb-6">Options</h2>
 
-        <button id="fourierBtn" class="mb-4 px-4 py-2 text-white rounded-lg shadow transition
- enabled:bg-blue-600 enabled:hover:bg-blue-700 enabled:focus:ring-2 enabled:focus:ring-blue-400 enabled:focus:ring-offset-1
- disabled:bg-gray-400 disabled:cursor-not-allowed disabled:opacity-60" disabled>
+        <button id="fourierBtn"
+            class="mb-4 px-4 py-2 text-white rounded-lg shadow enabled:bg-blue-600 enabled:hover:bg-blue-700 disabled:bg-gray-400 disabled:opacity-60"
+            disabled>
             Fourier
         </button>
 
-        <button id="clearButton" class="mb-6 px-4 py-2 bg-red-600 hover:bg-red-700 rounded w-full">
+        <button id="clearButton" class="mb-4 px-4 py-2 bg-red-600 hover:bg-red-700 rounded w-full">
             Clear Canvas
         </button>
 
@@ -45,14 +38,26 @@
         <div class="mt-6">
             <label class="block mb-2 text-sm font-medium">Upload Image:</label>
             <input type="file" id="imageInput" accept="image/*"
-                class="w-full text-sm text-white bg-gray-800 p-2 rounded" />
+                class="w-full text-sm text-white bg-gray-800 p-2 rounded">
         </div>
+
         <button id="edgeButton" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded w-full hidden">
             Detect Edges
         </button>
+
+        <button id="contourButton" class="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded w-full hidden">
+            Extract Contours
+        </button>
+        
+        <button id="testButton" class="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded w-full hidden">
+            test
+        </button>
+
     </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.0.0/math.js"></script>
     <script src="index.js"></script>
+
 </body>
 
 </html>

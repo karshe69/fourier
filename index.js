@@ -6,13 +6,16 @@ const clearButton = document.getElementById('clearButton');
 const pointsCount = document.getElementById('pointsCount');
 const imageInput = document.getElementById('imageInput');
 const edgeButton = document.getElementById('edgeButton');
+const contourButton = document.getElementById('contourButton');
 const fourierButton = document.getElementById('fourierBtn');
+const testButton = document.getElementById('testButton');
+
+
 let DrawInterval
 let freq = 0
 let delta = 0
 
 let uploadedImage = null;
-
 
 let drawing = false;
 let points = [];
@@ -101,101 +104,100 @@ function applySobel(imageData) {
   return new ImageData(output, width, height);
 }
 
-function FFT() {
-  fixToRadix2()
-  let DFT = new Array(points.length).fill(0)
-  DFT = ditFFT2(points, points.length)
-  let circles = DFTtoCircle(DFT)
-  freq = 2 * math.pi / points.length * math.ceil(points.length / 500)  
-  DrawInterval = setInterval(drawCircle, 10, circles);
+function trimToRadix2() {
+
+  let power = Math.floor(Math.log2(points.length))
+  let target = 2 ** power
+
+  let step = points.length / target
+  let newPoints = []
+
+  for (let i = 0; i < target; i++) {
+    newPoints.push(points[Math.floor(i * step)])
+  }
+
+  points = newPoints
 }
+
+
+function FFT() {
+
+  trimToRadix2()
+
+  let DFT = ditFFT2(points, points.length)
+
+  let circles = DFTtoCircle(DFT)
+
+  freq = 2 * Math.PI / points.length * Math.ceil(points.length / 500)
+
+  DrawInterval = setInterval(drawCircle, 10, circles)
+
+}
+
 
 function DFTtoCircle(DFT) {
   let circles = []
   for (let i = 0; i < DFT.length; i++) {
-    circles.push({ freq: i, amp: math.abs(DFT[i]), phase: math.atan2(DFT[i].im, DFT[i].re) })
+    circles.push({
+      freq: i,
+      amp: math.abs(DFT[i]),
+      phase: math.atan2(DFT[i].im, DFT[i].re)
+    })
   }
   circles.sort((a, b) => b.amp - a.amp)
   return circles
 }
 
 function ditFFT2(x, N, s = 1) {
-  // Allocate output array
-  const X = new Array(N);
-
-  // Base case
+  const X = new Array(N)
   if (N === 1) {
     X[0] = math.complex(x[0].x, x[0].y)
-    return X;
+    return X
   }
-
-  // Recursive DFTs of even and odd indices
-  const even = ditFFT2(x, N / 2, 2 * s);         // x0, x2s, x4s, ...
-  const odd = ditFFT2(x.slice(s), N / 2, 2 * s); // xs, x3s, x5s, ...
-
-  // Combine
+  const even = ditFFT2(x, N / 2, 2 * s)
+  const odd = ditFFT2(x.slice(s), N / 2, 2 * s)
   for (let k = 0; k < N / 2; k++) {
-    const t = math.multiply(math.exp(math.multiply(math.i, 2 * Math.PI * k / N)), odd[k]);
-    X[k] = math.add(even[k], t);
-    X[k + N / 2] = math.subtract(even[k], t);
+    const t = math.multiply(
+      math.exp(math.multiply(math.i, 2 * Math.PI * k / N)),
+      odd[k]
+    )
+    X[k] = math.add(even[k], t)
+    X[k + N / 2] = math.subtract(even[k], t)
   }
 
   if (s === 1) {
     for (let i = 0; i < N; i++) {
-      X[i] = math.divide(X[i], N);
+      X[i] = math.divide(X[i], N)
     }
   }
-
-  return X;
-}
-
-function fixToRadix2() {
-  let dots = points.length
-  let fix = 0
-  let power
-  for (power = 0; dots > 1; power++) {
-    if (dots % 2 == 1) {
-      dots += 1
-      fix += 2 ** power
-    }
-    dots /= 2
-  }
-  let dx = (points[0].x - points[points.length - 1].x) / fix
-  let dy = (points[0].y - points[points.length - 1].y) / fix
-
-  for (let i = 0; i < fix; i++) {
-    points.push({
-      x: (points[points.length - 1].x + dx),
-      y: (points[points.length - 1].y + dy)
-    })
-  }
+  return X
 }
 
 function drawCircle(circles) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  let x = 0, y = 0
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  let x = 0
+  let y = 0
   let way = []
   for (let i = 0; i < circles.length; i++) {
     way.push({ x, y })
-    x += circles[i].amp * math.cos(circles[i].phase + delta * circles[i].freq)
-    y += circles[i].amp * math.sin(circles[i].phase + delta * circles[i].freq)
+    x += circles[i].amp * Math.cos(circles[i].phase + delta * circles[i].freq)
+    y += circles[i].amp * Math.sin(circles[i].phase + delta * circles[i].freq)
   }
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 1;
-  for (let index = 1; index < way.length && circles[index].amp > 1; index++) {
-    ctx.beginPath();
-    ctx.arc(way[index].x, way[index].y, circles[index].amp, 0, 2 * Math.PI)
-    ctx.stroke();
+  ctx.strokeStyle = "white"
+  for (let i = 1; i < way.length; i++) {
+    ctx.beginPath()
+    ctx.arc(way[i].x, way[i].y, circles[i].amp, 0, 2 * Math.PI)
+    ctx.stroke()
   }
 
-  ctx.strokeStyle = "cyan";
-  ctx.beginPath();
+  ctx.strokeStyle = "cyan"
+  ctx.beginPath()
   ctx.moveTo(way[0].x, way[0].y)
-  for (let index = 1; index < way.length; index++) {
-    ctx.lineTo(way[index].x, way[index].y)
+  for (let i = 1; i < way.length; i++) {
+    ctx.lineTo(way[i].x, way[i].y)
   }
   ctx.lineTo(x, y)
-  ctx.stroke();
+  ctx.stroke()
 
   path.push({ x, y })
   delta += freq
@@ -203,77 +205,217 @@ function drawCircle(circles) {
 }
 
 function fadeOut() {
-  let alpha = 1 
-  dt = math.pow(0.2, freq/(2 * math.pi))
-  for (let i = path.length-1; i >= 1; i--) {
+  let alpha = 1
+  dt = math.pow(0.2, freq / (2 * math.pi))
+  for (let i = path.length - 1; i >= 1; i--) {
     ctx.strokeStyle = `rgba(255, 0, 0, ${alpha})`
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(path[i].x, path[i].y)
-    ctx.lineTo(path[i-1].x, path[i-1].y)        
+    ctx.lineTo(path[i - 1].x, path[i - 1].y)
     ctx.stroke();
-    alpha*=dt
+    alpha *= dt
   }
 }
 
 function redraw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(points[0].x, points[0].y);
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.strokeStyle = "white"
+  ctx.beginPath()
+  ctx.moveTo(points[0].x, points[0].y)
   for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i].x, points[i].y);
+    ctx.lineTo(points[i].x, points[i].y)
   }
-  ctx.stroke();
+  ctx.stroke()
+}
+
+function extractContours() {
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { width, height, data } = imageData;
+  let visited = new Uint8Array(width * height);
+
+  function isWhite(x, y) {
+    let i = (y * width + x) * 4;
+    return data[i] > 200; // Checking the thinned Sobel output
+  }
+
+  function markPixel(x, y, r, g, b) {
+    let i = (y * width + x) * 4;
+    data[i] = r; data[i + 1] = g; data[i + 2] = b;
+  }
+
+  // UPDATED: Line-following tracer for 1-pixel thin edges
+  function traceLine(startX, startY) {
+    let contour = [];
+    let stack = [{ x: startX, y: startY }];
+
+    while (stack.length > 0) {
+      let { x, y } = stack.pop();
+      let idx = y * width + x;
+
+      if (visited[idx] || !isWhite(x, y)) continue;
+      visited[idx] = 1;
+
+      contour.push({ x, y });
+      markPixel(x, y, 0, 255, 0); // Green for the line
+
+      // 8-neighbor check to follow the path
+      const neighbors = [
+        [1, 0], [1, 1], [0, 1], [-1, 1],
+        [-1, 0], [-1, -1], [0, -1], [1, -1]
+      ];
+
+      for (let [dx, dy] of neighbors) {
+        let nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          let nIdx = ny * width + nx;
+          if (isWhite(nx, ny) && !visited[nIdx]) {
+            stack.push({ x: nx, y: ny });
+            // CRITICAL: Stop looking for other neighbors once we find the next step
+            // This prevents the "clumping" and forces a single line path
+            break;
+          }
+        }
+      }
+    }
+    return contour;
+  }
+
+  let contours = [];
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let idx = y * width + x;
+      if (isWhite(x, y) && !visited[idx]) {
+        let contour = traceLine(x, y);
+
+        // Filter out tiny noise, but keep shorter lines than before
+        if (contour.length > 15) {
+          contours.push(contour);
+        } else {
+          for (let p of contour) markPixel(p.x, p.y, 255, 0, 0); // Red for noise
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  // Apply your connection logic
+  if (typeof connectContours === "function") {
+    contours = connectContours(contours);
+  }
+
+  // Draw connections (Blue)
+  ctx.strokeStyle = "blue";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < contours.length; i++) {
+    let prevContour = contours[i - 1];
+    let currContour = contours[i];
+    let a = prevContour[prevContour.length - 1]; // End of previous
+    let b = currContour[0];                     // Start of current
+
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  return contours;
+}
+
+function connectContours(contours) {
+
+  if (contours.length === 0) return
+
+  let remaining = contours.slice(1)
+  let ordered = [contours[0]]
+
+  while (remaining.length > 0) {
+
+    let lastContour = ordered[ordered.length - 1]
+    let lastPoint = lastContour[lastContour.length - 1]
+
+    let bestIndex = 0
+    let bestDist = Infinity
+
+    for (let i = 0; i < remaining.length; i++) {
+
+      let candidate = remaining[i][0]
+
+      let dx = lastPoint.x - candidate.x
+      let dy = lastPoint.y - candidate.y
+
+      let dist = dx * dx + dy * dy
+
+      if (dist < bestDist) {
+        bestDist = dist
+        bestIndex = i
+      }
+    }
+
+    ordered.push(remaining[bestIndex])
+    remaining.splice(bestIndex, 1)
+  }
+
+  return ordered
+}
+
+function contoursToPoints(contours) {
+  points = []
+  for (let c of contours) {
+    for (let p of c) {
+      points.push(p)
+    }
+  }
+  updatePointsCount()
 }
 
 function drawLine(p1, p2, color = 'white') {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(p1.x, p1.y);
-  ctx.lineTo(p2.x, p2.y);
-  ctx.stroke();
+  ctx.strokeStyle = color
+  ctx.beginPath()
+  ctx.moveTo(p1.x, p1.y)
+  ctx.lineTo(p2.x, p2.y)
+  ctx.stroke()
 }
 
 function addPoint(e) {
   const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  points.push({ x, y });
-  updatePointsCount();
+  const x = e.clientX - rect.left
+  const y = e.clientY - rect.top
+  points.push({ x, y })
+  updatePointsCount()
 }
 
 function updatePointsCount() {
-  pointsCount.textContent = points.length;
+  pointsCount.textContent = points.length
 }
 
 toggleButton.addEventListener('click', () => {
-  sidebar.classList.toggle('-translate-x-full');
-});
+  sidebar.classList.toggle('-translate-x-full')
+})
 
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+window.addEventListener('resize', resizeCanvas)
+
+resizeCanvas()
 
 function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
 }
 
 canvas.addEventListener('mousedown', (e) => {
-  drawing = true;
+  drawing = true
   if (fourierButton.disabled) {
-    fourierBtn.removeAttribute("disabled");
+    fourierBtn.removeAttribute("disabled")
   }
-  addPoint(e);
+  addPoint(e)
   redraw()
-});
+})
 
 canvas.addEventListener('mouseup', () => {
-  drawing = false;
-  drawLine(points[points.length - 1], points[0], "lime");
-});
+  drawing = false
+  drawLine(points[points.length - 1], points[0], "lime")
+})
 
 canvas.addEventListener('mousemove', (e) => {
   if (!drawing) return;
@@ -283,77 +425,76 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 fourierButton.addEventListener('click', () => {
-  fourierBtn.setAttribute("disabled", true);
+  fourierBtn.setAttribute("disabled", true)
   FFT()
-});
+})
 
 clearButton.addEventListener('click', () => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  points = [];
-  path = [];
-  updatePointsCount();
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  points = []
+  path = []
+  updatePointsCount()
 
   // Clear uploaded image and file input
-  imageInput.value = '';
-  uploadedImage = null;
-  edgeButton.classList.add('hidden'); // Optionally hide the button again
+  imageInput.value = ''
+  uploadedImage = null
+  edgeButton.classList.add('hidden') // Optionally hide the button again
+  contourButton.classList.add('hidden')
   clearInterval(DrawInterval)
-});
+})
 
-imageInput.addEventListener('change', (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
+imageInput.addEventListener('change', event => {
+  const file = event.target.files[0]
+  if (!file) return
 
-  const img = new Image();
-  const reader = new FileReader();
+  const img = new Image()
+  const reader = new FileReader()
 
-  reader.onload = function (e) {
-    img.onload = function () {
-      console.log('Image loaded successfully'); // ADD THIS LINE
-      uploadedImage = img;
-      edgeButton.classList.remove('hidden'); // Show the button
-      console.log(edgeButton.classList);
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+  reader.onload = e => {
+    img.onload = () => {
+      console.log('Image loaded successfully') // ADD THIS LINE
+      uploadedImage = img
+      edgeButton.classList.remove('hidden')
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       // Optional: show the original image scaled to fit canvas
-      const aspectRatio = img.width / img.height;
-      let drawWidth = canvas.width;
-      let drawHeight = canvas.height;
+      const aspectRatio = img.width / img.height
+      let drawWidth = canvas.width
+      let drawHeight = canvas.height
 
       if (canvas.width / canvas.height > aspectRatio) {
-        drawWidth = canvas.height * aspectRatio;
+        drawWidth = canvas.height * aspectRatio
       } else {
-        drawHeight = canvas.width / aspectRatio;
+        drawHeight = canvas.width / aspectRatio
       }
 
-      ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
-    };
+      ctx.drawImage(img, 0, 0, drawWidth, drawHeight)
+    }
     img.src = e.target.result;
-  };
+  }
 
-  reader.readAsDataURL(file);
-});
+  reader.readAsDataURL(file)
+})
 
 edgeButton.addEventListener('click', () => {
-  if (!uploadedImage) return;
+  if (!uploadedImage) return
 
-  const tempCanvas = document.createElement('canvas');
-  const tempCtx = tempCanvas.getContext('2d');
-  tempCanvas.width = uploadedImage.width;
-  tempCanvas.height = uploadedImage.height;
-  tempCtx.drawImage(uploadedImage, 0, 0);
-  const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+  const tempCanvas = document.createElement('canvas')
+  const tempCtx = tempCanvas.getContext('2d')
+  tempCanvas.width = uploadedImage.width
+  tempCanvas.height = uploadedImage.height
+  tempCtx.drawImage(uploadedImage, 0, 0)
 
-  const edgeData = applySobel(imageData);
+  const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height)
+  const edgeData = applySobel(imageData)
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  const scaleCanvas = document.createElement('canvas');
-  scaleCanvas.width = edgeData.width;
-  scaleCanvas.height = edgeData.height;
-  const scaleCtx = scaleCanvas.getContext('2d');
-  scaleCtx.putImageData(edgeData, 0, 0);
+  const scaleCanvas = document.createElement('canvas')
+  scaleCanvas.width = edgeData.width
+  scaleCanvas.height = edgeData.height
+  const scaleCtx = scaleCanvas.getContext('2d')
+  scaleCtx.putImageData(edgeData, 0, 0)
 
   // Scale edge image to fit canvas
   const aspectRatio = scaleCanvas.width / scaleCanvas.height;
@@ -367,4 +508,16 @@ edgeButton.addEventListener('click', () => {
   }
 
   ctx.drawImage(scaleCanvas, 0, 0, drawWidth, drawHeight);
+  contourButton.classList.remove('hidden')
 });
+
+contourButton.addEventListener('click', () => {
+  const contours = extractContours()
+  contoursToPoints(contours)
+  fourierButton.removeAttribute("disabled")
+  testButton.classList.remove('hidden')
+})
+
+testButton.addEventListener('click', () => {
+  redraw()
+})
