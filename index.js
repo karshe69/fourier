@@ -105,18 +105,52 @@ function applySobel(imageData) {
 }
 
 function trimToRadix2() {
+  if (points.length < 2) return;
 
-  let power = Math.floor(Math.log2(points.length))
-  let target = 2 ** power
-
-  let step = points.length / target
-  let newPoints = []
-
-  for (let i = 0; i < target; i++) {
-    newPoints.push(points[Math.floor(i * step)])
+  // 1. Calculate the total length of the path (perimeter)
+  let totalLength = 0;
+  let distances = [0];
+  for (let i = 0; i < points.length - 1; i++) {
+    let dx = points[i + 1].x - points[i].x;
+    let dy = points[i + 1].y - points[i].y;
+    let d = Math.sqrt(dx * dx + dy * dy);
+    totalLength += d;
+    distances.push(totalLength);
   }
 
-  points = newPoints
+  // 2. Determine Radix-2 target
+  let power = Math.floor(Math.log2(points.length));
+  let target = Math.pow(2, power);
+
+  // 3. Interpolate points at equal distance intervals
+  let newPoints = [];
+  let interval = totalLength / (target - 1);
+
+  for (let i = 0; i < target; i++) {
+    let targetDist = i * interval;
+
+    // Find the segment where this distance falls
+    let j = 0;
+    while (j < distances.length - 2 && distances[j + 1] < targetDist) {
+      j++;
+    }
+
+    // Interpolate between points[j] and points[j+1]
+    let segStartDist = distances[j];
+    let segEndDist = distances[j + 1];
+    let t = (segEndDist === segStartDist) ? 0 : (targetDist - segStartDist) / (segEndDist - segStartDist);
+
+    let p1 = points[j];
+    let p2 = points[j + 1];
+
+    newPoints.push({
+      x: p1.x + t * (p2.x - p1.x),
+      y: p1.y + t * (p2.y - p1.y)
+    });
+  }
+
+  points = newPoints;
+  updatePointsCount()
 }
 
 
@@ -131,7 +165,8 @@ function FFT() {
   freq = 2 * Math.PI / points.length * Math.ceil(points.length / 500)
 
   DrawInterval = setInterval(drawCircle, 10, circles)
-
+  console.log(circles[circles.length-1].amp);
+  console.log(circles[circles.length/2].amp);
 }
 
 
@@ -173,35 +208,48 @@ function ditFFT2(x, N, s = 1) {
   return X
 }
 
+// 1. Update the signature to accept circles
 function drawCircle(circles) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  let x = 0
-  let y = 0
-  let way = []
-  for (let i = 0; i < circles.length; i++) {
-    way.push({ x, y })
-    x += circles[i].amp * Math.cos(circles[i].phase + delta * circles[i].freq)
-    y += circles[i].amp * Math.sin(circles[i].phase + delta * circles[i].freq)
-  }
-  ctx.strokeStyle = "white"
-  for (let i = 1; i < way.length; i++) {
-    ctx.beginPath()
-    ctx.arc(way[i].x, way[i].y, circles[i].amp, 0, 2 * Math.PI)
-    ctx.stroke()
+  if (!circles) return; // Safety check
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let x = 0;
+  let y = 0;
+
+  const circlePath = new Path2D();
+  const linePath = new Path2D();
+  linePath.moveTo(x, y);
+
+  for (let i = 0; i < circles.length && (i < circles.length/2 || circles[i] > 0.01); i++) {
+    const c = circles[i];
+    const angle = c.phase + delta * c.freq;
+
+    let nextX = x + c.amp * Math.cos(angle);
+    let nextY = y + c.amp * Math.sin(angle);
+
+    if (c.amp > 0.5) {
+      circlePath.moveTo(x + c.amp, y);
+      circlePath.arc(x, y, c.amp, 0, 2 * Math.PI);
+    }
+
+    linePath.lineTo(nextX, nextY);
+    x = nextX;
+    y = nextY;
   }
 
-  ctx.strokeStyle = "cyan"
-  ctx.beginPath()
-  ctx.moveTo(way[0].x, way[0].y)
-  for (let i = 1; i < way.length; i++) {
-    ctx.lineTo(way[i].x, way[i].y)
-  }
-  ctx.lineTo(x, y)
-  ctx.stroke()
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.stroke(circlePath);
 
-  path.push({ x, y })
-  delta += freq
-  fadeOut()
+  ctx.strokeStyle = "cyan";
+  ctx.stroke(linePath);
+
+  path.push({ x, y });
+
+  // Important: ensure delta is updated
+  delta += freq;
+
+  fadeOut();
 }
 
 function fadeOut() {
@@ -220,13 +268,32 @@ function fadeOut() {
 
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.strokeStyle = "white"
-  ctx.beginPath()
-  ctx.moveTo(points[0].x, points[0].y)
+
+  // compute total path length
+  let totalLength = 0
   for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i].x, points[i].y)
+    let dx = points[i].x - points[i - 1].x
+    let dy = points[i].y - points[i - 1].y
+    totalLength += Math.hypot(dx, dy)
   }
-  ctx.stroke()
+
+  let distance = 0
+
+  for (let i = 1; i < points.length; i++) {
+    let dx = points[i].x - points[i - 1].x
+    let dy = points[i].y - points[i - 1].y
+    let segLength = Math.hypot(dx, dy)
+
+    distance += segLength
+    let hue = (distance / totalLength) * 360
+
+    ctx.strokeStyle = `hsl(${hue},100%,50%)`
+
+    ctx.beginPath()
+    ctx.moveTo(points[i - 1].x, points[i - 1].y)
+    ctx.lineTo(points[i].x, points[i].y)
+    ctx.stroke()
+  }
 }
 
 function extractContours() {
@@ -235,8 +302,9 @@ function extractContours() {
   let visited = new Uint8Array(width * height);
 
   function isWhite(x, y) {
+    if (x < 0 || y < 0 || x >= width || y >= height) return false;
     let i = (y * width + x) * 4;
-    return data[i] > 200; // Checking the thinned Sobel output
+    return data[i] > 200;
   }
 
   function markPixel(x, y, r, g, b) {
@@ -244,120 +312,195 @@ function extractContours() {
     data[i] = r; data[i + 1] = g; data[i + 2] = b;
   }
 
-  // UPDATED: Line-following tracer for 1-pixel thin edges
-  function traceLine(startX, startY) {
+  const neighbors = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+
+  // --- CONFIG ---
+  const minKeepSize = 15;
+  const skipDist = 3;
+
+  function traceAdaptive(startX, startY) {
     let contour = [];
-    let stack = [{ x: startX, y: startY }];
+    let history = [];
+    let current = { x: startX, y: startY };
+    let lastSaved = { x: startX, y: startY };
+    let totalPixels = 0;
 
-    while (stack.length > 0) {
-      let { x, y } = stack.pop();
-      let idx = y * width + x;
+    visited[startY * width + startX] = 1;
+    contour.push({ x: startX, y: startY });
+    history.push(current);
 
-      if (visited[idx] || !isWhite(x, y)) continue;
-      visited[idx] = 1;
-
-      contour.push({ x, y });
-      markPixel(x, y, 0, 255, 0); // Green for the line
-
-      // 8-neighbor check to follow the path
-      const neighbors = [
-        [1, 0], [1, 1], [0, 1], [-1, 1],
-        [-1, 0], [-1, -1], [0, -1], [1, -1]
-      ];
-
+    while (history.length > 0) {
+      let next = null;
       for (let [dx, dy] of neighbors) {
-        let nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-          let nIdx = ny * width + nx;
-          if (isWhite(nx, ny) && !visited[nIdx]) {
-            stack.push({ x: nx, y: ny });
-            // CRITICAL: Stop looking for other neighbors once we find the next step
-            // This prevents the "clumping" and forces a single line path
-            break;
-          }
+        let nx = current.x + dx, ny = current.y + dy;
+        if (isWhite(nx, ny) && !visited[ny * width + nx]) {
+          next = { x: nx, y: ny };
+          break;
+        }
+      }
+
+      if (next) {
+        visited[next.y * width + next.x] = 1;
+        history.push(next);
+        totalPixels++;
+        let distSq = Math.pow(next.x - lastSaved.x, 2) + Math.pow(next.y - lastSaved.y, 2);
+        if (totalPixels < 15 || distSq >= skipDist * skipDist) {
+          contour.push(next);
+          lastSaved = next;
+        }
+        current = next;
+      } else {
+        if (current.x !== lastSaved.x || current.y !== lastSaved.y) {
+          contour.push({ x: current.x, y: current.y });
+          lastSaved = current;
+        }
+        history.pop();
+        if (history.length > 0) current = history[history.length - 1];
+      }
+    }
+    return { path: contour, size: totalPixels };
+  }
+
+  let finalContours = [];
+  let tinySegments = [];
+
+  // Phase 1: Initial Tracing
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (isWhite(x, y) && !visited[y * width + x]) {
+        let result = traceAdaptive(x, y);
+        if (result.size >= minKeepSize) {
+          finalContours.push(result.path);
+        } else {
+          tinySegments.push(result);
         }
       }
     }
-    return contour;
   }
 
-  let contours = [];
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let idx = y * width + x;
-      if (isWhite(x, y) && !visited[idx]) {
-        let contour = traceLine(x, y);
+  // Phase 2: Recursive / Team-Up Bridging
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = tinySegments.length - 1; i >= 0; i--) {
+      let small = tinySegments[i];
+      let shouldKeep = false;
 
-        // Filter out tiny noise, but keep shorter lines than before
-        if (contour.length > 15) {
-          contours.push(contour);
-        } else {
-          for (let p of contour) markPixel(p.x, p.y, 255, 0, 0); // Red for noise
+      // Calculate radius based on its own size
+      let dynamicRadius = 2.0 + (small.size * 0.8); // Slightly boosted reach
+      let dynamicRadiusSq = dynamicRadius * dynamicRadius;
+
+      // Check against established finalContours
+      for (let large of finalContours) {
+        // Check BOTH start and end of the small segment for better connectivity
+        let pointsToCheck = [small.path[0], small.path[small.path.length - 1]];
+
+        for (let sP of pointsToCheck) {
+          for (let j = 0; j < large.length; j += 2) {
+            let dx = sP.x - large[j].x;
+            let dy = sP.y - large[j].y;
+            if (dx * dx + dy * dy <= dynamicRadiusSq) {
+              shouldKeep = true;
+              break;
+            }
+          }
+          if (shouldKeep) break;
         }
+        if (shouldKeep) break;
       }
+
+      if (shouldKeep) {
+        finalContours.push(small.path);
+        tinySegments.splice(i, 1);
+        changed = true; // A new island was added, so other tiny ones might now connect to IT
+      }
+    }
+  }
+
+  // --- THE FIX: COLOR ALL FINAL CONTOURS GREEN ---
+  for (let contour of finalContours) {
+    for (let p of contour) {
+      markPixel(p.x, p.y, 0, 255, 0);
     }
   }
 
   ctx.putImageData(imageData, 0, 0);
 
-  // Apply your connection logic
+  // Connection logic
   if (typeof connectContours === "function") {
-    contours = connectContours(contours);
+    finalContours = connectContours(finalContours);
   }
 
-  // Draw connections (Blue)
+  // Draw Connections (Blue)
   ctx.strokeStyle = "blue";
   ctx.lineWidth = 1;
-  for (let i = 1; i < contours.length; i++) {
-    let prevContour = contours[i - 1];
-    let currContour = contours[i];
-    let a = prevContour[prevContour.length - 1]; // End of previous
-    let b = currContour[0];                     // Start of current
-
+  for (let i = 1; i < finalContours.length; i++) {
+    let a = finalContours[i - 1][finalContours[i - 1].length - 1];
+    let b = finalContours[i][0];
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
 
-  return contours;
+  return finalContours;
 }
 
 function connectContours(contours) {
+  if (contours.length <= 1) return contours;
 
-  if (contours.length === 0) return
-
-  let remaining = contours.slice(1)
-  let ordered = [contours[0]]
+  // Start with the first contour
+  let remaining = contours.slice(1);
+  let ordered = [contours[0]];
 
   while (remaining.length > 0) {
+    let lastContour = ordered[ordered.length - 1];
+    let lastPoint = lastContour[lastContour.length - 1];
 
-    let lastContour = ordered[ordered.length - 1]
-    let lastPoint = lastContour[lastContour.length - 1]
-
-    let bestIndex = 0
-    let bestDist = Infinity
+    let bestIndex = 0;
+    let bestDist = Infinity;
+    let shouldReverse = false;
 
     for (let i = 0; i < remaining.length; i++) {
+      let candidate = remaining[i];
+      let startPoint = candidate[0];
+      let endPoint = candidate[candidate.length - 1];
 
-      let candidate = remaining[i][0]
+      // 1. Check distance to candidate START
+      let dxStart = lastPoint.x - startPoint.x;
+      let dyStart = lastPoint.y - startPoint.y;
+      let dStart = dxStart * dxStart + dyStart * dyStart;
 
-      let dx = lastPoint.x - candidate.x
-      let dy = lastPoint.y - candidate.y
+      if (dStart < bestDist) {
+        bestDist = dStart;
+        bestIndex = i;
+        shouldReverse = false;
+      }
 
-      let dist = dx * dx + dy * dy
+      // 2. Check distance to candidate END
+      let dxEnd = lastPoint.x - endPoint.x;
+      let dyEnd = lastPoint.y - endPoint.y;
+      let dEnd = dxEnd * dxEnd + dyEnd * dyEnd;
 
-      if (dist < bestDist) {
-        bestDist = dist
-        bestIndex = i
+      if (dEnd < bestDist) {
+        bestDist = dEnd;
+        bestIndex = i;
+        shouldReverse = true;
       }
     }
 
-    ordered.push(remaining[bestIndex])
-    remaining.splice(bestIndex, 1)
+    // Pull the best candidate out of the remaining list
+    let nextContour = remaining.splice(bestIndex, 1)[0];
+
+    // If the end was closer, reverse the points so it connects smoothly
+    if (shouldReverse) {
+      nextContour.reverse();
+    }
+
+    ordered.push(nextContour);
   }
 
-  return ordered
+  return ordered;
 }
 
 function contoursToPoints(contours) {
@@ -401,6 +544,7 @@ resizeCanvas()
 function resizeCanvas() {
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
+  redraw()
 }
 
 canvas.addEventListener('mousedown', (e) => {
