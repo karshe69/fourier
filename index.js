@@ -165,8 +165,8 @@ function FFT() {
   freq = 2 * Math.PI / points.length * Math.ceil(points.length / 500)
 
   DrawInterval = setInterval(drawCircle, 10, circles)
-  console.log(circles[circles.length-1].amp);
-  console.log(circles[circles.length/2].amp);
+  console.log(circles[circles.length - 1].amp);
+  console.log(circles[circles.length / 2].amp);
 }
 
 
@@ -221,7 +221,7 @@ function drawCircle(circles) {
   const linePath = new Path2D();
   linePath.moveTo(x, y);
 
-  for (let i = 0; i < circles.length && (i < circles.length/2 || circles[i] > 0.01); i++) {
+  for (let i = 0; i < circles.length && (i < circles.length / 2 || circles[i] > 0.005); i++) {
     const c = circles[i];
     const angle = c.phase + delta * c.freq;
 
@@ -449,58 +449,68 @@ function extractContours() {
 function connectContours(contours) {
   if (contours.length <= 1) return contours;
 
-  // Start with the first contour
-  let remaining = contours.slice(1);
-  let ordered = [contours[0]];
-
-  while (remaining.length > 0) {
-    let lastContour = ordered[ordered.length - 1];
-    let lastPoint = lastContour[lastContour.length - 1];
-
-    let bestIndex = 0;
-    let bestDist = Infinity;
-    let shouldReverse = false;
-
-    for (let i = 0; i < remaining.length; i++) {
-      let candidate = remaining[i];
-      let startPoint = candidate[0];
-      let endPoint = candidate[candidate.length - 1];
-
-      // 1. Check distance to candidate START
-      let dxStart = lastPoint.x - startPoint.x;
-      let dyStart = lastPoint.y - startPoint.y;
-      let dStart = dxStart * dxStart + dyStart * dyStart;
-
-      if (dStart < bestDist) {
-        bestDist = dStart;
-        bestIndex = i;
-        shouldReverse = false;
-      }
-
-      // 2. Check distance to candidate END
-      let dxEnd = lastPoint.x - endPoint.x;
-      let dyEnd = lastPoint.y - endPoint.y;
-      let dEnd = dxEnd * dxEnd + dyEnd * dyEnd;
-
-      if (dEnd < bestDist) {
-        bestDist = dEnd;
-        bestIndex = i;
-        shouldReverse = true;
-      }
-    }
-
-    // Pull the best candidate out of the remaining list
-    let nextContour = remaining.splice(bestIndex, 1)[0];
-
-    // If the end was closer, reverse the points so it connects smoothly
-    if (shouldReverse) {
-      nextContour.reverse();
-    }
-
-    ordered.push(nextContour);
+  let remaining = [...contours];
+  // Start with the contour that has the leftmost point (usually a safe bet)
+  let bestStartIdx = 0;
+  let minX = Infinity;
+  for (let i = 0; i < remaining.length; i++) {
+    if (remaining[i][0].x < minX) { minX = remaining[i][0].x; bestStartIdx = i; }
   }
 
-  return ordered;
+  let currentContour = remaining.splice(bestStartIdx, 1)[0];
+  let fullPath = [...currentContour];
+
+  while (remaining.length > 0) {
+    let lastPoint = fullPath[fullPath.length - 1];
+    let bestDist = Infinity;
+    let bestIdx = -1;
+    let reverseCandidate = false;
+
+    // Find the closest point in the remaining islands
+    for (let i = 0; i < remaining.length; i++) {
+      let dStart = Math.hypot(lastPoint.x - remaining[i][0].x, lastPoint.y - remaining[i][0].y);
+      let dEnd = Math.hypot(lastPoint.x - remaining[i][remaining[i].length - 1].x, lastPoint.y - remaining[i][remaining[i].length - 1].y);
+
+      if (dStart < bestDist) { bestDist = dStart; bestIdx = i; reverseCandidate = false; }
+      if (dEnd < bestDist) { bestDist = dEnd; bestIdx = i; reverseCandidate = true; }
+    }
+
+    let next = remaining.splice(bestIdx, 1)[0];
+    if (reverseCandidate) next.reverse();
+
+    // --- THE RETRACING LOGIC ---
+    // If the gap to the next segment is large (e.g., > 10px), 
+    // we "retrace" our path backwards until we find a point that is closer 
+    // to the next segment's start.
+    if (bestDist > 10) {
+      let bestRetraceIdx = fullPath.length - 1;
+      let minRetraceDist = bestDist;
+      let targetPoint = next[0];
+
+      // Look back through the last 500 points we've drawn
+      let lookbackLimit = Math.max(0, fullPath.length - 500);
+      for (let j = fullPath.length - 1; j > lookbackLimit; j--) {
+        let d = Math.hypot(fullPath[j].x - targetPoint.x, fullPath[j].y - targetPoint.y);
+        if (d < minRetraceDist) {
+          minRetraceDist = d;
+          bestRetraceIdx = j;
+        }
+      }
+
+      // If we found a significantly better jump-off point, retrace to it
+      if (bestRetraceIdx < fullPath.length - 1) {
+        for (let r = fullPath.length - 2; r >= bestRetraceIdx; r--) {
+          fullPath.push(fullPath[r]); // Add the "walk back" points
+        }
+      }
+    }
+
+    // Finally, add the new segment
+    fullPath = fullPath.concat(next);
+  }
+
+  // We return a single array wrapped in an array to keep your code compatible
+  return [fullPath];
 }
 
 function contoursToPoints(contours) {
