@@ -208,61 +208,99 @@ function ditFFT2(x, N, s = 1) {
   return X
 }
 
-// 1. Update the signature to accept circles
-function drawCircle(circles) {
-  if (!circles) return; // Safety check
+// Persistent off-screen buffer variables
+let trailCanvas = null;
+let trailCtx = null;
+let lastX = null;
+let lastY = null;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function drawCircle(circles) {
+  if (!circles || !ctx) return;
+
+  const w = canvas.width;
+  const h = canvas.height;
+
+  // Initialize or Resize Buffer
+  if (!trailCanvas || trailCanvas.width !== w || trailCanvas.height !== h) {
+    trailCanvas = document.createElement('canvas');
+    trailCanvas.width = w;
+    trailCanvas.height = h;
+    trailCtx = trailCanvas.getContext('2d');
+  }
+
+  // Clear main canvas
+  ctx.clearRect(0, 0, w, h);
 
   let x = 0;
   let y = 0;
 
   const circlePath = new Path2D();
-  const linePath = new Path2D();
-  linePath.moveTo(x, y);
+  const connectorPath = new Path2D();
+  connectorPath.moveTo(x, y);
 
-  for (let i = 0; i < circles.length && (i < circles.length / 2 || circles[i] > 0.005); i++) {
+  for (let i = 0; i < circles.length; i++) {
     const c = circles[i];
-    const angle = c.phase + delta * c.freq;
+    // if (i >= circles.length / 2 && c.amp <= 0.005) break;
 
-    let nextX = x + c.amp * Math.cos(angle);
-    let nextY = y + c.amp * Math.sin(angle);
+    const angle = c.phase + delta * c.freq;
+    const nextX = x + c.amp * Math.cos(angle);
+    const nextY = y + c.amp * Math.sin(angle);
 
     if (c.amp > 0.5) {
       circlePath.moveTo(x + c.amp, y);
       circlePath.arc(x, y, c.amp, 0, 2 * Math.PI);
     }
 
-    linePath.lineTo(nextX, nextY);
+    connectorPath.lineTo(nextX, nextY);
     x = nextX;
     y = nextY;
   }
 
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-  ctx.stroke(circlePath);
-
-  ctx.strokeStyle = "cyan";
-  ctx.stroke(linePath);
-
+  // Update original path array
   path.push({ x, y });
 
-  // Important: ensure delta is updated
-  delta += freq;
-
+  // Call the original fadeOut function structure
   fadeOut();
+
+  // Draw the buffer to the main screen
+  ctx.drawImage(trailCanvas, 0, 0);
+
+  // Draw structure
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.stroke(circlePath);
+  ctx.strokeStyle = "cyan";
+  ctx.stroke(connectorPath);
+
+  delta += freq;
 }
 
 function fadeOut() {
-  let alpha = 1
+  if (!trailCtx) return;
+
+  // Clear the buffer each frame so we can redraw the path with original logic
+  trailCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+
+  let alpha = 1;
+  // Calculate dt based on a full rotation as requested
+  // dt ^ (2*PI / freq) = 0.001 (threshold for complete fade)
   dt = math.pow(0.2, freq / (2 * math.pi))
+
+  // Original loop structure
   for (let i = path.length - 1; i >= 1; i--) {
-    ctx.strokeStyle = `rgba(255, 0, 0, ${alpha})`
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(path[i].x, path[i].y)
-    ctx.lineTo(path[i - 1].x, path[i - 1].y)
-    ctx.stroke();
-    alpha *= dt
+    // If alpha is effectively 0, stop drawing and trim path to save memory
+    if (alpha < 0.005) {
+      path.splice(0, i); // Memory management: remove old points that are invisible
+      break;
+    }
+
+    trailCtx.strokeStyle = `rgba(255, 0, 0, ${alpha})`;
+    trailCtx.lineWidth = 2;
+    trailCtx.beginPath();
+    trailCtx.moveTo(path[i].x, path[i].y);
+    trailCtx.lineTo(path[i - 1].x, path[i - 1].y);
+    trailCtx.stroke();
+
+    alpha *= dt;
   }
 }
 
