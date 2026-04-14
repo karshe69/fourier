@@ -9,6 +9,14 @@ const edgeButton = document.getElementById('edgeButton');
 const contourButton = document.getElementById('contourButton');
 const fourierButton = document.getElementById('fourierBtn');
 const testButton = document.getElementById('testButton');
+const devToggle = document.getElementById('devToggle');
+const devCheckbox = document.getElementById('devCheckbox');
+const checkMark = document.getElementById('checkMark');
+const pointsInfo = document.getElementById('pointsInfo');
+
+
+let contourVflag = false;
+let testVflag = false
 
 
 let DrawInterval
@@ -16,10 +24,19 @@ let freq = 0
 let delta = 0
 
 let uploadedImage = null;
+let edgeData = null;
 
 let drawing = false;
 let points = [];
 let path = []
+
+// Persistent off-screen buffer variables
+let trailCanvas = null;
+let trailCtx = null;
+let lastX = null;
+let lastY = null;
+
+let devModeActive = false;
 
 function applySobel(imageData) {
   const { width, height, data } = imageData;
@@ -162,9 +179,9 @@ function FFT() {
 
   let circles = DFTtoCircle(DFT)
 
-  freq = 2 * Math.PI / points.length * Math.ceil(points.length / 500)
+  freq = 2 * Math.PI / points.length * Math.ceil(points.length / 10000)
 
-  DrawInterval = setInterval(drawCircle, 10, circles)
+  DrawInterval = setInterval(drawCircle, 0, circles)
   console.log(circles[circles.length - 1].amp);
   console.log(circles[circles.length / 2].amp);
 }
@@ -208,12 +225,6 @@ function ditFFT2(x, N, s = 1) {
   return X
 }
 
-// Persistent off-screen buffer variables
-let trailCanvas = null;
-let trailCtx = null;
-let lastX = null;
-let lastY = null;
-
 function drawCircle(circles) {
   if (!circles || !ctx) return;
 
@@ -246,11 +257,10 @@ function drawCircle(circles) {
     const nextX = x + c.amp * Math.cos(angle);
     const nextY = y + c.amp * Math.sin(angle);
 
-    if (c.amp > 0.5) {
+    if (c.amp > 5) {
       circlePath.moveTo(x + c.amp, y);
       circlePath.arc(x, y, c.amp, 0, 2 * Math.PI);
     }
-
     connectorPath.lineTo(nextX, nextY);
     x = nextX;
     y = nextY;
@@ -334,25 +344,21 @@ function redraw() {
   }
 }
 
-function extractContours() {
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const { width, height, data } = imageData;
-  let visited = new Uint8Array(width * height);
+function extractContours(edgeData, drawWidth, drawHeight) {
+  const { width: origWidth, height: origHeight, data } = edgeData;
+  let visited = new Uint8Array(origWidth * origHeight);
+
+  // Calculate the ratio once
+  const scaleX = drawWidth / origWidth;
+  const scaleY = drawHeight / origHeight;
 
   function isWhite(x, y) {
-    if (x < 0 || y < 0 || x >= width || y >= height) return false;
-    let i = (y * width + x) * 4;
+    if (x < 0 || y < 0 || x >= origWidth || y >= origHeight) return false;
+    let i = (y * origWidth + x) * 4;
     return data[i] > 200;
   }
 
-  function markPixel(x, y, r, g, b) {
-    let i = (y * width + x) * 4;
-    data[i] = r; data[i + 1] = g; data[i + 2] = b;
-  }
-
   const neighbors = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
-
-  // --- CONFIG ---
   const minKeepSize = 15;
   const skipDist = 3;
 
@@ -363,7 +369,7 @@ function extractContours() {
     let lastSaved = { x: startX, y: startY };
     let totalPixels = 0;
 
-    visited[startY * width + startX] = 1;
+    visited[startY * origWidth + startX] = 1;
     contour.push({ x: startX, y: startY });
     history.push(current);
 
@@ -371,14 +377,14 @@ function extractContours() {
       let next = null;
       for (let [dx, dy] of neighbors) {
         let nx = current.x + dx, ny = current.y + dy;
-        if (isWhite(nx, ny) && !visited[ny * width + nx]) {
+        if (isWhite(nx, ny) && !visited[ny * origWidth + nx]) {
           next = { x: nx, y: ny };
           break;
         }
       }
 
       if (next) {
-        visited[next.y * width + next.x] = 1;
+        visited[next.y * origWidth + next.x] = 1;
         history.push(next);
         totalPixels++;
         let distSq = Math.pow(next.x - lastSaved.x, 2) + Math.pow(next.y - lastSaved.y, 2);
@@ -402,85 +408,48 @@ function extractContours() {
   let finalContours = [];
   let tinySegments = [];
 
-  // Phase 1: Initial Tracing
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (isWhite(x, y) && !visited[y * width + x]) {
+  for (let y = 0; y < origHeight; y++) {
+    for (let x = 0; x < origWidth; x++) {
+      if (isWhite(x, y) && !visited[y * origWidth + x]) {
         let result = traceAdaptive(x, y);
-        if (result.size >= minKeepSize) {
-          finalContours.push(result.path);
-        } else {
-          tinySegments.push(result);
-        }
+        if (result.size >= minKeepSize) finalContours.push(result.path);
+        else tinySegments.push(result);
       }
     }
   }
 
-  // Phase 2: Recursive / Team-Up Bridging
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (let i = tinySegments.length - 1; i >= 0; i--) {
-      let small = tinySegments[i];
-      let shouldKeep = false;
+  // ... (Keep Phase 2: Bridging logic exactly the same) ...
 
-      // Calculate radius based on its own size
-      let dynamicRadius = 2.0 + (small.size * 0.8); // Slightly boosted reach
-      let dynamicRadiusSq = dynamicRadius * dynamicRadius;
-
-      // Check against established finalContours
-      for (let large of finalContours) {
-        // Check BOTH start and end of the small segment for better connectivity
-        let pointsToCheck = [small.path[0], small.path[small.path.length - 1]];
-
-        for (let sP of pointsToCheck) {
-          for (let j = 0; j < large.length; j += 2) {
-            let dx = sP.x - large[j].x;
-            let dy = sP.y - large[j].y;
-            if (dx * dx + dy * dy <= dynamicRadiusSq) {
-              shouldKeep = true;
-              break;
-            }
-          }
-          if (shouldKeep) break;
-        }
-        if (shouldKeep) break;
-      }
-
-      if (shouldKeep) {
-        finalContours.push(small.path);
-        tinySegments.splice(i, 1);
-        changed = true; // A new island was added, so other tiny ones might now connect to IT
-      }
-    }
-  }
-
-  // --- THE FIX: COLOR ALL FINAL CONTOURS GREEN ---
-  for (let contour of finalContours) {
-    for (let p of contour) {
-      markPixel(p.x, p.y, 0, 255, 0);
-    }
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-
-  // Connection logic
   if (typeof connectContours === "function") {
     finalContours = connectContours(finalContours);
   }
+  if (devModeActive) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // --- DRAWING FEEDBACK ---
+    ctx.lineWidth = 1;
+    for (let i = 0; i < finalContours.length; i++) {
+      const contour = finalContours[i];
+      ctx.strokeStyle = "lime";
+      ctx.beginPath();
+      for (let j = 0; j < contour.length; j++) {
+        // Scale points to fit the drawWidth/Height at (0,0)
+        const sx = contour[j].x * scaleX;
+        const sy = contour[j].y * scaleY;
+        if (j === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
 
-  // Draw Connections (Blue)
-  ctx.strokeStyle = "blue";
-  ctx.lineWidth = 1;
-  for (let i = 1; i < finalContours.length; i++) {
-    let a = finalContours[i - 1][finalContours[i - 1].length - 1];
-    let b = finalContours[i][0];
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
+      if (i < finalContours.length - 1) {
+        const nextC = finalContours[i + 1];
+        ctx.strokeStyle = "blue";
+        ctx.beginPath();
+        ctx.moveTo(contour[contour.length - 1].x * scaleX, contour[contour.length - 1].y * scaleY);
+        ctx.lineTo(nextC[0].x * scaleX, nextC[0].y * scaleY);
+        ctx.stroke();
+      }
+    }
   }
-
   return finalContours;
 }
 
@@ -632,6 +601,9 @@ clearButton.addEventListener('click', () => {
   uploadedImage = null
   edgeButton.classList.add('hidden') // Optionally hide the button again
   contourButton.classList.add('hidden')
+  testButton.classList.add('hidden')
+  testVflag = false
+  contourVflag = false
   clearInterval(DrawInterval)
 })
 
@@ -675,16 +647,18 @@ edgeButton.addEventListener('click', () => {
   const tempCtx = tempCanvas.getContext('2d')
   tempCanvas.width = uploadedImage.width
   tempCanvas.height = uploadedImage.height
+
   tempCtx.drawImage(uploadedImage, 0, 0)
 
   const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height)
-  const edgeData = applySobel(imageData)
+  edgeData = applySobel(imageData)
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
   const scaleCanvas = document.createElement('canvas')
   scaleCanvas.width = edgeData.width
   scaleCanvas.height = edgeData.height
+
   const scaleCtx = scaleCanvas.getContext('2d')
   scaleCtx.putImageData(edgeData, 0, 0)
 
@@ -700,16 +674,76 @@ edgeButton.addEventListener('click', () => {
   }
 
   ctx.drawImage(scaleCanvas, 0, 0, drawWidth, drawHeight);
-  contourButton.classList.remove('hidden')
+  contourVflag = true
+  if (devModeActive)
+    contourButton.classList.remove('hidden')
+  else
+    contourButton.click();
 });
 
 contourButton.addEventListener('click', () => {
-  const contours = extractContours()
-  contoursToPoints(contours)
-  fourierButton.removeAttribute("disabled")
-  testButton.classList.remove('hidden')
-})
+  if (!edgeData) return;
+
+  // 1. Calculate scaling using your requested method
+  const aspectRatio = edgeData.width / edgeData.height;
+  let drawWidth = canvas.width;
+  let drawHeight = canvas.height;
+
+  if (canvas.width / canvas.height > aspectRatio) {
+    drawWidth = canvas.height * aspectRatio;
+  } else {
+    drawHeight = canvas.width / aspectRatio;
+  }
+
+  // 2. Extract and draw (scaling is handled inside, offset is 0)
+  const contours = extractContours(edgeData, drawWidth, drawHeight);
+
+  // 3. Map final points for Fourier Transform
+  const scaleX = drawWidth / edgeData.width;
+  const scaleY = drawHeight / edgeData.height;
+
+  points = contours.flat().map(p => ({
+    x: p.x * scaleX,
+    y: p.y * scaleY
+  }));
+
+  updatePointsCount();
+  testVflag = true
+  fourierButton.removeAttribute("disabled");
+  if (devModeActive)
+    testButton.classList.remove('hidden');
+});
 
 testButton.addEventListener('click', () => {
   redraw()
 })
+
+devToggle.addEventListener('click', () => {
+  devModeActive = !devModeActive;
+
+  if (devModeActive) {
+    // Checked state
+    devCheckbox.classList.replace('border-gray-500', 'bg-blue-600');
+    devCheckbox.classList.add('border-blue-600');
+    checkMark.classList.remove('hidden');
+    if (testVflag)
+      testButton.classList.remove('hidden');
+    if (contourVflag)
+      contourButton.classList.remove('hidden');
+      pointsInfo.classList.remove('hidden')
+    // Show hidden dev elements
+    console.log("Dev Mode: ON");
+  } else {
+    // Unchecked state
+    devCheckbox.classList.replace('bg-blue-600', 'border-gray-500');
+    devCheckbox.classList.remove('border-blue-600');
+    checkMark.classList.add('hidden');
+    pointsInfo.classList.add('hidden')
+    if (testVflag)
+      testButton.classList.add('hidden');
+    if (contourVflag)
+      contourButton.classList.add('hidden');
+    // Hide dev elements
+    console.log("Dev Mode: OFF");
+  }
+});

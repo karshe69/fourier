@@ -17,42 +17,56 @@
     </button>
 
     <div id="sidebar"
-        class="fixed top-0 left-0 h-full w-64 bg-gray-900 text-white pt-20 px-6 transform -translate-x-full transition-transform duration-300 z-20">
+        class="fixed top-0 left-0 h-full w-64 bg-gray-900 text-white pt-20 px-6 transform -translate-x-full transition-transform duration-300 z-20 flex flex-col">
 
-        <h2 class="text-2xl font-bold mb-6">Options</h2>
+        <div class="flex-grow overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-6">Options</h2>
 
-        <button id="fourierBtn"
-            class="mb-4 px-4 py-2 text-white rounded-lg shadow enabled:bg-blue-600 enabled:hover:bg-blue-700 disabled:bg-gray-400 disabled:opacity-60"
-            disabled>
-            Fourier
-        </button>
+            <button id="fourierBtn"
+                class="mb-4 px-4 py-2 text-white rounded-lg shadow enabled:bg-blue-600 enabled:hover:bg-blue-700 disabled:bg-gray-400 disabled:opacity-60"
+                disabled>
+                Fourier
+            </button>
 
-        <button id="clearButton" class="mb-4 px-4 py-2 bg-red-600 hover:bg-red-700 rounded w-full">
-            Clear Canvas
-        </button>
+            <div class="mt-6">
+                <input type="file" id="imageInput" accept="image/*"
+                    class="w-full text-sm text-white bg-gray-800 p-2 rounded">
+            </div>
 
-        <div class="text-lg">
-            Points: <span id="pointsCount">0</span>
+            <button id="edgeButton" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded w-full hidden">
+                Detect Edges
+            </button>
+
+            <button id="contourButton" class="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded w-full hidden">
+                Extract Contours
+            </button>
+
+            <button id="testButton" class="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded w-full hidden">
+                test
+            </button>
         </div>
 
-        <div class="mt-6">
-            <label class="block mb-2 text-sm font-medium">Upload Image:</label>
-            <input type="file" id="imageInput" accept="image/*"
-                class="w-full text-sm text-white bg-gray-800 p-2 rounded">
+        <div class="py-6 space-y-6">
+            <div id="pointsInfo" class="text-lg mb-4 hidden">
+                Points: <span id="pointsCount">0</span>
+            </div>
+
+            <button id="clearButton"
+                class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded w-full transition-colors font-medium">
+                Clear Canvas
+            </button>
+
+            <div id="devToggle" class="flex items-center justify-between cursor-pointer group">
+                <span
+                    class="text-xs font-semibold tracking-widest uppercase text-gray-500 group-hover:text-white transition-colors">
+                    Dev Mode
+                </span>
+                <div id="devCheckbox"
+                    class="w-5 h-5 border-2 border-gray-600 rounded flex items-center justify-center transition-all duration-200">
+                    <span id="checkMark" class="hidden text-white text-[10px]">✓</span>
+                </div>
+            </div>
         </div>
-
-        <button id="edgeButton" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded w-full hidden">
-            Detect Edges
-        </button>
-
-        <button id="contourButton" class="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded w-full hidden">
-            Extract Contours
-        </button>
-        
-        <button id="testButton" class="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded w-full hidden">
-            test
-        </button>
-
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.0.0/math.js"></script>
